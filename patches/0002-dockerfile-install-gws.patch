@@ -1,0 +1,14 @@
+diff --git a/Dockerfile b/Dockerfile
+--- a/Dockerfile
++++ b/Dockerfile
+@@ -203,6 +203,10 @@ RUN npm install --prefer-offline --no-audit --fetch-retries=5 && \
+     done && \
+     npm cache clean --force
+ 
++# Install gws (Google Workspace CLI) globally
++RUN npm install -g @googleworkspace/cli --no-audit --fetch-retries=5 && \
++    npm cache clean --force
++
+ # ---------- Photon iMessage sidecar deps (baked, NS-606) ----------
+ # The photon plugin's Node sidecar needs its own node_modules
+ # (spectrum-ts). The install tree is immutable at runtime, so a lazy

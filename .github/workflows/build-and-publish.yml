@@ -1,0 +1,145 @@
+name: Build and Publish to GHCR
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 6 * * *"   # 每天 6:00 UTC 检查上游 release；有新版本才构建
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Force rebuild even if this release's image already exists
+        type: boolean
+        default: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: laserduor/hermes-agent
+  UPSTREAM_REPO: NousResearch/hermes-agent
+
+concurrency:
+  group: build-and-publish
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      ref: ${{ steps.release.outputs.ref }}
+      should_build: ${{ steps.decide.outputs.should_build }}
+    steps:
+      - name: Resolve latest upstream release tag
+        id: release
+        run: |
+          set -euo pipefail
+          TAG=$(curl -fsSL \
+            -H "Authorization: Bearer ${{ github.token }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${UPSTREAM_REPO}/releases/latest" | jq -r '.tag_name')
+          test -n "$TAG" && test "$TAG" != "null"
+          echo "ref=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Latest upstream release: $TAG"
+
+      - name: Decide whether to build
+        id: decide
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "push" ] || [ "${{ inputs.force }}" = "true" ]; then
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+            echo "Forced build (event=${{ github.event_name }})"
+            exit 0
+          fi
+          if docker manifest inspect "${REGISTRY}/${IMAGE_NAME}:${{ steps.release.outputs.ref }}" > /dev/null 2>&1; then
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+            echo "Image for ${{ steps.release.outputs.ref }} already exists — skipping build."
+          else
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+            echo "No image for ${{ steps.release.outputs.ref }} yet — building."
+          fi
+
+  build-and-push:
+    needs: resolve
+    if: needs.resolve.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout this repo (patches)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          path: builder
+
+      - name: Checkout upstream source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ env.UPSTREAM_REPO }}
+          ref: ${{ needs.resolve.outputs.ref }}
+          path: src
+          fetch-depth: 1
+
+      - name: Apply patches
+        working-directory: src
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          patches=(../builder/patches/*.patch)
+          if [ ${#patches[@]} -eq 0 ]; then
+            echo "No patches found — building unmodified upstream"; exit 0
+          fi
+          for p in "${patches[@]}"; do
+            echo "::group::Applying $(basename "$p")"
+            if ! git apply --verbose "$p"; then
+              echo "::warning::git apply failed for $(basename "$p"); retrying with patch -p1 --fuzz=3"
+              patch -p1 --forward --fuzz=3 --no-backup-if-mismatch < "$p"
+            fi
+            echo "::endgroup::"
+          done
+          echo "--- custom diff after patching ---"
+          git --no-pager diff
+
+      - name: Compute build metadata
+        id: meta
+        run: |
+          echo "sha=$(git -C src rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "short=$(git -C src rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
+        with:
+          context: src
+          file: src/Dockerfile
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.resolve.outputs.ref }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ steps.meta.outputs.short }}
+          build-args: |
+            HERMES_GIT_SHA=${{ steps.meta.outputs.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ steps.meta.outputs.sha }}
+            org.opencontainers.image.version=${{ needs.resolve.outputs.ref }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Verify pushed image (gh + gws present)
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ steps.meta.outputs.short }}
+        run: |
+          docker pull "$IMAGE"
+          docker run --rm --entrypoint bash "$IMAGE" -lc 'gh --version && gws --version'
