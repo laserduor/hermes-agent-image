@@ -4,7 +4,7 @@
 
 ```dockerfile
 FROM nousresearch/hermes-agent:<release tag>
-+ gh         （apt）
++ gh         （GitHub 官方 apt 源，构建时最新版）
 + gws        （npm，@googleworkspace/cli）
 + lark-cli   （npm，@larksuite/cli，postinstall 装入平台二进制）
 + codegraph  （npm，@colbymchenry/codegraph，自包含运行时）

@@ -6,7 +6,15 @@ FROM ${BASE_IMAGE}
 
 # 官方推荐模式：以 root 安装；s6 在运行时负责降权，入口脚本保持官方原样。
 USER root
-RUN apt-get -o Acquire::Retries=3 update \
+
+# gh：GitHub 官方 apt 源（cli.github.com/packages）→ 构建时最新版；Debian 仓库版本过旧。
+RUN mkdir -p -m 755 /etc/apt/keyrings \
+    && curl -fsSL --retry 3 https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+         -o /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+    && chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+         > /etc/apt/sources.list.d/github-cli.list \
+    && apt-get -o Acquire::Retries=3 update \
     && apt-get -o Acquire::Retries=3 install -y --no-install-recommends gh \
     && rm -rf /var/lib/apt/lists/*
 
