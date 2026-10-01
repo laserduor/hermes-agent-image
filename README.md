@@ -41,5 +41,5 @@ docker run --rm --entrypoint bash my-hermes -lc 'gh --version && gws --version'
 
 ## 备注
 
-- 上游代码更新完全经由官方镜像承载；本仓库只负责两个工具层，不耦合上游源码结构，几乎不会因上游改动而失效。
-- 旧 fork `laserduor/hermes-agent` 的 `Sync Upstream` / `Build and Publish` 定时任务已停用（仓库保留）。
+- 上游代码更新完全经由官方镜像承载；本仓库只负责工具层，不耦合上游源码结构，几乎不会因上游改动而失效。
+- 旧 fork `laserduor/hermes-agent` 已删除。旧 GHCR 包 `ghcr.io/laserduor/hermes-agent` 保留（unlinked、public），可继续拉取用于回滚。

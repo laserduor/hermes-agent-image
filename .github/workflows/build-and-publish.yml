@@ -3,6 +3,7 @@ name: Build and Publish to GHCR
 on:
   push:
     branches: [main]
+    paths-ignore: ["**.md"]
   schedule:
     - cron: "0 6 * * *"   # 每天 6:00 UTC 检查上游 release；有新版本才构建
   workflow_dispatch:
