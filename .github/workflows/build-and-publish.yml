@@ -14,7 +14,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: laserduor/hermes-agent
+  IMAGE_NAME: laserduor/hermes-agent-image
   UPSTREAM_REPO: NousResearch/hermes-agent
   BASE_REPO: nousresearch/hermes-agent   # Docker Hub 官方镜像
 

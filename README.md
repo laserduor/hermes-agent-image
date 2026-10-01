@@ -20,7 +20,7 @@ FROM nousresearch/hermes-agent:<release tag>
 
 ## 镜像
 
-`ghcr.io/laserduor/hermes-agent`（linux/amd64）：
+`ghcr.io/laserduor/hermes-agent-image`（linux/amd64）：
 
 | tag | 含义 |
 |---|---|
@@ -28,6 +28,7 @@ FROM nousresearch/hermes-agent:<release tag>
 | `v2026.x.y` | 对应上游 release（部署建议固定此 tag） |
 
 > 旧流水线的 `main` / `sha-*` / `nightly-*` tag 不再产生。
+> 部署端：把镜像引用从 `ghcr.io/laserduor/hermes-agent` 改为 `ghcr.io/laserduor/hermes-agent-image`（旧包不再更新）。
 
 ## 本地构建 / 验证
 
