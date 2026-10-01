@@ -16,6 +16,7 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: laserduor/hermes-agent
   UPSTREAM_REPO: NousResearch/hermes-agent
+  BASE_REPO: nousresearch/hermes-agent   # Docker Hub 官方镜像
 
 concurrency:
   group: build-and-publish
@@ -63,49 +64,13 @@ jobs:
     needs: resolve
     if: needs.resolve.outputs.should_build == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 30
     permissions:
       contents: read
       packages: write
     steps:
-      - name: Checkout this repo (patches)
+      - name: Checkout this repo
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          path: builder
-
-      - name: Checkout upstream source
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          repository: ${{ env.UPSTREAM_REPO }}
-          ref: ${{ needs.resolve.outputs.ref }}
-          path: src
-          fetch-depth: 1
-
-      - name: Apply patches
-        working-directory: src
-        run: |
-          set -euo pipefail
-          shopt -s nullglob
-          patches=(../builder/patches/*.patch)
-          if [ ${#patches[@]} -eq 0 ]; then
-            echo "No patches found — building unmodified upstream"; exit 0
-          fi
-          for p in "${patches[@]}"; do
-            echo "::group::Applying $(basename "$p")"
-            if ! git apply --verbose "$p"; then
-              echo "::warning::git apply failed for $(basename "$p"); retrying with patch -p1 --fuzz=3"
-              patch -p1 --forward --fuzz=3 --no-backup-if-mismatch < "$p"
-            fi
-            echo "::endgroup::"
-          done
-          echo "--- custom diff after patching ---"
-          git --no-pager diff
-
-      - name: Compute build metadata
-        id: meta
-        run: |
-          echo "sha=$(git -C src rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-          echo "short=$(git -C src rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
@@ -120,26 +85,25 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
         with:
-          context: src
-          file: src/Dockerfile
+          context: .
+          file: Dockerfile
           push: true
           platforms: linux/amd64
+          build-args: |
+            BASE_IMAGE=${{ env.BASE_REPO }}:${{ needs.resolve.outputs.ref }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.resolve.outputs.ref }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ steps.meta.outputs.short }}
-          build-args: |
-            HERMES_GIT_SHA=${{ steps.meta.outputs.sha }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.revision=${{ steps.meta.outputs.sha }}
+            org.opencontainers.image.base.name=docker.io/${{ env.BASE_REPO }}:${{ needs.resolve.outputs.ref }}
             org.opencontainers.image.version=${{ needs.resolve.outputs.ref }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Verify pushed image (gh + gws present)
         env:
-          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ steps.meta.outputs.short }}
+          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.resolve.outputs.ref }}
         run: |
           docker pull "$IMAGE"
           docker run --rm --entrypoint bash "$IMAGE" -lc 'gh --version && gws --version'
