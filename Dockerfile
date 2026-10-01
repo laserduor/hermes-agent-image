@@ -10,7 +10,8 @@ RUN apt-get -o Acquire::Retries=3 update \
     && apt-get -o Acquire::Retries=3 install -y --no-install-recommends gh \
     && rm -rf /var/lib/apt/lists/*
 
-RUN npm install -g @googleworkspace/cli --no-audit --fetch-retries=5 \
+# npm 默认阻止 postinstall 脚本；显式放行该包（其 install.js 是官方安装步骤的一部分）。
+RUN npm install -g --allow-scripts=@googleworkspace/cli @googleworkspace/cli --no-audit --fetch-retries=5 \
     && npm cache clean --force
 
 # ENTRYPOINT / CMD / s6 监督 / /opt/data 语义全部继承官方镜像，不做任何修改。
