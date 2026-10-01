@@ -1,11 +1,13 @@
 # hermes-agent-image
 
-在**官方镜像** [`nousresearch/hermes-agent`](https://hub.docker.com/r/nousresearch/hermes-agent) 之上叠加两个定制工具（`gh`、`gws`），上游每发布一个新 release 就自动构建并推送到 GHCR：
+在**官方镜像** [`nousresearch/hermes-agent`](https://hub.docker.com/r/nousresearch/hermes-agent) 之上叠加定制 CLI 工具（`gh`、`gws`、`lark-cli`、`codegraph`），上游每发布一个新 release 就自动构建并推送到 GHCR：
 
 ```dockerfile
 FROM nousresearch/hermes-agent:<release tag>
-+ gh   （apt）
-+ gws  （npm，@googleworkspace/cli）
++ gh         （apt）
++ gws        （npm，@googleworkspace/cli）
++ lark-cli   （npm，@larksuite/cli，postinstall 装入平台二进制）
++ codegraph  （npm，@colbymchenry/codegraph，自包含运行时）
 ```
 
 其余全部继承官方镜像（ENTRYPOINT / s6 监督 / `/opt/data` 语义 / `hermes` 命令），部署方式零改动。

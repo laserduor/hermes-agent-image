@@ -106,4 +106,4 @@ jobs:
           IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.resolve.outputs.ref }}
         run: |
           docker pull "$IMAGE"
-          docker run --rm --entrypoint bash "$IMAGE" -lc 'gh --version && gws --version'
+          docker run --rm --entrypoint bash "$IMAGE" -lc 'set -e; gh --version; gws --version; codegraph --version; lark-cli --version || lark-cli --help >/dev/null'
